@@ -1,0 +1,20 @@
+{
+  "id": "pd-device-bridge",
+  "name": "PD 按需 CLI 桥接",
+  "version": "0.1.0",
+  "protocol": "pd-chat-cli@2",
+  "capabilities": [
+    "desktop.helper-cli@2"
+  ],
+  "supported_runtime_platforms": [
+    "windows-x64"
+  ],
+  "entry": "pd-device-bridge.exe",
+  "runtime": {
+    "autostart": false,
+    "operations": [
+      "helper.cli"
+    ]
+  },
+  "retains_user_data_on_uninstall": true
+}

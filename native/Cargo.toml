@@ -1,0 +1,16 @@
+[package]
+name = "pd-device-bridge"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde_json = "1"
+base64 = "0.22"
+
+[lib]
+name = "pd_device_bridge"
+path = "src/lib.rs"
+
+[[bin]]
+name = "pd-device-bridge"
+path = "src/main.rs"

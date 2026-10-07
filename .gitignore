@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+build/
+config/
+.venv/
+
+native/target/
+
+# Local server installation backups and credentials
+install-records/
+.env
+.env.*
+*.log
+*.exe
+*.pdb
