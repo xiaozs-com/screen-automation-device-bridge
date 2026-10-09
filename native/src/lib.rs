@@ -1,28 +1,21 @@
+mod transfer;
 use serde_json::{json, Value};
 use std::{
-    io::Read,
+    io::{Read, Write},
     path::PathBuf,
     process::{Command, Stdio},
     time::{Duration, Instant},
 };
 
 pub fn validate_args(args: &[String]) -> bool {
-    if args.len() < 2
+    if args.is_empty()
         || args.len() > 128
         || !matches!(args[0].as_str(), "cli" | "browser")
         || args.iter().any(|a| a.len() > 4096 || a.contains('\0'))
     {
         return false;
     }
-    if args[0] == "browser" {
-        return true;
-    }
-    match args[1].as_str() {
-        "status" | "describe" | "capabilities" | "health" => args.len() == 2,
-        "access" => args.len() == 3 && args[2] == "list",
-        "window" | "screen" | "mouse" | "keyboard" | "ocr" | "browser" => args.len() >= 3,
-        _ => false,
-    }
+    true
 }
 fn helper_args(args: &[String]) -> Vec<String> {
     if args.first().map(String::as_str) == Some("browser") {
@@ -33,29 +26,53 @@ fn helper_args(args: &[String]) -> Vec<String> {
         args.to_vec()
     }
 }
-fn cli_path() -> Result<PathBuf, String> {
+#[cfg(any(target_os = "macos", test))]
+fn macos_helper_paths(home: Option<&std::path::Path>) -> Vec<PathBuf> {
+    let app = "Screen Automation Helper.app/Contents/MacOS/screen-automation-helper";
     let mut paths = Vec::new();
+    if let Some(home) = home {
+        paths.push(home.join("Applications").join(app));
+    }
+    paths.push(PathBuf::from("/Applications").join(app));
+    paths
+}
+fn cli_path() -> Result<PathBuf, String> {
     if let Some(p) = std::env::var_os("SCREEN_AUTOMATION_HELPER_EXE") {
-        paths.push(PathBuf::from(p));
+        let path = PathBuf::from(p);
+        return if path.is_absolute() && path.is_file() {
+            Ok(path)
+        } else {
+            Err("SCREEN_AUTOMATION_HELPER_EXE 必须指向已安装小助手的绝对 CLI 路径".into())
+        };
     }
-    if let Some(p) = std::env::var_os("LOCALAPPDATA") {
-        paths.push(
-            PathBuf::from(p)
-                .join("Programs/Xiaozs/ScreenAutomationHelper/ScreenAutomationHelper.exe"),
-        );
-    }
+    #[cfg(target_os = "macos")]
+    let paths = macos_helper_paths(std::env::var_os("HOME").map(PathBuf::from).as_deref());
+    #[cfg(not(target_os = "macos"))]
+    let paths: Vec<PathBuf> = std::env::var_os("LOCALAPPDATA")
+        .map(|p| {
+            vec![PathBuf::from(p)
+                .join("Programs/Xiaozs/ScreenAutomationHelper/ScreenAutomationHelper.exe")]
+        })
+        .unwrap_or_default();
     paths
         .into_iter()
         .find(|p| p.is_absolute() && p.is_file())
-        .ok_or("未找到已安装的小助手".into())
+        .ok_or("未找到已安装的小助手；可用 SCREEN_AUTOMATION_HELPER_EXE 指定绝对 CLI 路径".into())
 }
 pub fn execute_cli(args: &[String]) -> Result<Value, String> {
+    execute_request(args, None)
+}
+
+pub fn execute_request(args: &[String], input: Option<&Value>) -> Result<Value, String> {
     if !validate_args(args) {
-        return Err("CLI 操作超出已启用范围".into());
+        return Err("CLI 参数格式无效".into());
     }
+    let mut transfer = transfer::Transfer::prepare(args, input)?;
     let mut cmd = Command::new(cli_path()?);
-    cmd.args(helper_args(args))
-        .stdin(Stdio::null())
+    cmd.args(helper_args(&transfer.args))
+        .stdin(Stdio::piped())
+        .env("PYTHONUTF8", "1")
+        .env("PYTHONIOENCODING", "utf-8")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     #[cfg(windows)]
@@ -64,6 +81,12 @@ pub fn execute_cli(args: &[String]) -> Result<Value, String> {
         cmd.creation_flags(0x08000000);
     }
     let mut child = cmd.spawn().map_err(|_| "小助手启动失败")?;
+    let stdin = child.stdin.take().ok_or("标准输入不可用")?;
+    let text = transfer.stdin.clone().unwrap_or_default();
+    let writer = std::thread::spawn(move || {
+        let mut stdin = stdin;
+        stdin.write_all(text.as_bytes())
+    });
     let stdout = child.stdout.take().ok_or("输出不可用")?;
     let stderr = child.stderr.take().ok_or("输出不可用")?;
     let read = |stream: Box<dyn Read + Send>| {
@@ -89,6 +112,7 @@ pub fn execute_cli(args: &[String]) -> Result<Value, String> {
             }
         }
     };
+    let _ = writer.join();
     let out = out
         .join()
         .map_err(|_| "输出读取失败")?
@@ -124,13 +148,36 @@ pub fn execute_cli(args: &[String]) -> Result<Value, String> {
             }
         }
     }
+    let files = transfer.collect()?;
+    if !files.is_empty() {
+        result["files"] = json!(files);
+    }
+    if status.success() {
+        let uploaded = transfer.keep_uploads();
+        if !uploaded.is_empty() {
+            result["uploaded_files"] = json!(uploaded);
+        }
+    }
     Ok(result)
 }
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
-    fn only_pd_cli_families_are_allowed() {
+    fn macos_paths_use_the_cli_launcher_in_both_install_locations() {
+        let paths = macos_helper_paths(Some(std::path::Path::new("/Users/test user")));
+        assert_eq!(paths[0], PathBuf::from("/Users/test user/Applications/Screen Automation Helper.app/Contents/MacOS/screen-automation-helper"));
+        assert_eq!(paths[1], PathBuf::from("/Applications/Screen Automation Helper.app/Contents/MacOS/screen-automation-helper"));
+        assert_eq!(macos_helper_paths(None), vec![paths[1].clone()]);
+    }
+    #[test]
+    fn all_helper_subcommands_are_allowed() {
+        assert!(validate_args(
+            &["cli", "workflow", "schema"].map(String::from)
+        ));
+        assert!(validate_args(
+            &["cli", "future-command", "--help"].map(String::from)
+        ));
         for args in [
             vec!["cli", "status"],
             vec!["cli", "browser", "status"],
@@ -146,8 +193,8 @@ mod tests {
         }
         for args in [
             vec!["powershell", "run"],
-            vec!["cli", "workflow", "run"],
-            vec!["cli", "access", "activate"],
+            vec!["powershell", "-Command", "run"],
+            vec!["cmd", "/c", "run"],
             vec!["cli", "bad\0arg"],
         ] {
             assert!(!validate_args(

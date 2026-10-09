@@ -70,8 +70,8 @@ class BrokerTests(unittest.IsolatedAsyncioTestCase):
    provision_cli(self.workspace);first=resolver.read_text();provision_cli(self.workspace)
   self.assertEqual(first,resolver.read_text());self.assertIn("PD_CHAT_CLI_RESOLVER_V2",first)
   self.assertEqual(resolver.with_name("resolve_cli.sh.before-pd-bridge").read_text(),original)
- def test_system_commands_and_workflow_execution_are_rejected(self):
-  for args in [["bash","-c","bad"],["cli","workflow","run"],["cli","access","activate"],["cli","screen","bad\0"]]:
+ def test_invalid_args_and_system_entry_points_are_rejected(self):
+  for args in [["bash","-c","bad"],["powershell","-Command","run"],["cmd","/c","run"],["cli","screen","bad\0"]]:
    with self.assertRaises(ValueError):validate_args(args)
  async def test_browser_proxy_uses_same_connection_and_preserves_helper_error(self):
   async def send(frame):
@@ -82,13 +82,39 @@ class BrokerTests(unittest.IsolatedAsyncioTestCase):
   stdout,stderr=await proc.communicate()
   self.assertEqual(proc.returncode,2)
   self.assertEqual(json.loads(stdout)["error"],"浏览器组件未启用")
- async def test_proxy_reports_unsupported_cli_instead_of_generic_unavailable(self):
-  async def send(frame):self.fail("must reject before sending")
+
+ async def test_workflow_stdin_and_files_use_same_connection(self):
+  contents=b"def run(ctx): pass"
+  async def send(frame):
+   self.assertEqual(frame["method"],"helper.cli.io")
+   self.assertEqual(frame["args"],["cli","workflow","show","test"])
+   self.assertEqual(frame["input"]["stdin"],"中文输入")
+   result=output("{}")
+   result["files"]=[{"source":"C:/test/flow.py","name":"flow.py","kind":"file","files":[{"path":"flow.py","data":base64.b64encode(contents).decode()}]}]
+   self.broker.complete("one",dict(frame,result=result))
   self.bind(send)
-  proc=await asyncio.create_subprocess_exec(sys.executable,str(Path(__file__).with_name("pd_cli_proxy.py")),"cli","workflow","run",cwd=self.workspace,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
-  stdout,stderr=await proc.communicate()
-  self.assertEqual(proc.returncode,1)
-  self.assertIn("超出当前桥接支持范围",json.loads(stderr)["error"])
-  self.assertNotIn(b"unavailable",stderr)
+  proc=await asyncio.create_subprocess_exec(sys.executable,str(Path(__file__).with_name("pd_cli_proxy.py")),"--pd-download","C:/test/flow.py","cli","workflow","show","test",cwd=self.workspace,stdin=asyncio.subprocess.PIPE,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
+  stdout,stderr=await proc.communicate("中文输入".encode())
+  self.assertEqual(proc.returncode,0,stderr)
+  path=Path(json.loads(stdout)["bridge_files"][0]["path"])
+  self.assertTrue(path.is_relative_to(self.workspace))
+  self.assertEqual(path.read_bytes(),contents)
+
+ def test_future_helper_subcommands_are_not_blocked(self):
+  for args in [["cli"],["cli","--help"],["cli","workflow","install","test"],["cli","access","activate"],["cli","future-command"]]:
+   self.assertEqual(validate_args(args),args)
+
+ async def test_workflow_directory_is_uploaded_automatically(self):
+  folder=self.workspace/"中文 流程";folder.mkdir();(folder/"flow.py").write_text("source",encoding="utf-8")
+  async def send(frame):
+   self.assertEqual(frame["method"],"helper.cli.io")
+   item=frame["input"]["uploads"][0]
+   self.assertEqual(item["arg_index"],3)
+   self.assertEqual(item["kind"],"directory")
+   self.assertEqual(base64.b64decode(item["files"][0]["data"]),b"source")
+   self.broker.complete("one",dict(frame,result=output()))
+  self.bind(send)
+  proc=await asyncio.create_subprocess_exec(sys.executable,str(Path(__file__).with_name("pd_cli_proxy.py")),"cli","workflow","inspect",str(folder),cwd=self.workspace,stdin=asyncio.subprocess.DEVNULL,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
+  stdout,stderr=await proc.communicate();self.assertEqual(proc.returncode,0,stderr)
 
 if __name__=="__main__":unittest.main()

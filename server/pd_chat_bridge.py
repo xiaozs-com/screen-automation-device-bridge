@@ -9,12 +9,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PROTOCOL = "pd-chat-cli@2"
 
 def validate_args(args):
-    if not isinstance(args,list) or not 2<=len(args)<=128 or args[0] not in ("cli","browser") or any(not isinstance(a,str) or len(a.encode())>4096 or "\0" in a for a in args):raise ValueError("invalid CLI args")
-    if args[0]=="browser":return args
-    family=args[1]
-    valid=(family in ("status","describe","capabilities","health") and len(args)==2) or (family=="access" and args==["cli","access","list"]) or (family in ("window","screen","mouse","keyboard","ocr","browser") and len(args)>=3)
-    if not valid:raise ValueError("unsupported CLI operation")
+    if not isinstance(args,list) or not 1<=len(args)<=128 or args[0] not in ("cli","browser") or any(not isinstance(a,str) or len(a.encode())>4096 or "\0" in a for a in args):raise ValueError("invalid CLI args")
     return args
+
+def validate_input(value):
+    if value is None: return None
+    if not isinstance(value,dict) or set(value)-{"stdin","uploads","downloads"}: raise ValueError("invalid CLI input")
+    if len(json.dumps(value,ensure_ascii=False).encode()) > 8*1024*1024: raise ValueError("CLI input too large")
+    if "stdin" in value and (not isinstance(value["stdin"],str) or len(value["stdin"].encode())>1024*1024): raise ValueError("invalid stdin")
+    for key in ("uploads","downloads"):
+        if key in value and (not isinstance(value[key],list) or len(value[key])>128): raise ValueError("invalid file list")
+    return value
 
 def normalize_result(result):
     if not isinstance(result,dict):raise ValueError("invalid result")
@@ -26,6 +31,14 @@ def normalize_result(result):
     if artifact is not None:
         if not isinstance(artifact,dict) or artifact.get("media_type")!="image/png" or not isinstance(artifact.get("data"),str) or len(artifact["data"])>6*1024*1024:raise ValueError("invalid artifact")
         value["artifact"]={"media_type":"image/png","data":artifact["data"]}
+    if "files" in result:
+        files=result["files"]
+        if not isinstance(files,list) or len(files)>128 or len(json.dumps(files).encode())>6*1024*1024: raise ValueError("invalid files")
+        value["files"]=files
+    if "uploaded_files" in result:
+        files=result["uploaded_files"]
+        if not isinstance(files,list) or len(files)>128 or len(json.dumps(files).encode())>64*1024: raise ValueError("invalid upload paths")
+        value["uploaded_files"]=files
     return value
 
 class ChatBroker:
@@ -49,18 +62,17 @@ class ChatBroker:
                 try:
                     self.connection.settimeout(100)
                     size = int(self.headers.get("Content-Length", "0"))
-                    if self.path != "/cli" or not 2<=size<=64*1024:
+                    if self.path != "/cli" or not 2<=size<=8*1024*1024:
                         raise ValueError()
                     auth = self.headers.get("Authorization", "")
                     if not auth.startswith("Bearer "):
                         raise ValueError()
-                    args=validate_args(json.loads(self.rfile.read(size)).get("args"))
-                    result = broker.call(auth[7:],args)
+                    request=json.loads(self.rfile.read(size))
+                    args=validate_args(request.get("args"))
+                    result = broker.call(auth[7:],args,validate_input(request.get("input")))
                     code = 200
                 except ValueError as error:
-                    if str(error) == "unsupported CLI operation":
-                        result={"ok":False,"error":"小助手命令超出当前桥接支持范围"}
-                    elif str(error) == "unauthorized":
+                    if str(error) == "unauthorized":
                         code=401
                         result={"ok":False,"error":"聊天桥接凭据已失效，请重新发起宠物聊天"}
                 except OSError:
@@ -95,8 +107,9 @@ class ChatBroker:
         temporary.replace(path)
         path.chmod(0o600)
 
-    def call(self, token, args):
+    def call(self, token, args, input=None):
         validate_args(args)
+        input=validate_input(input)
         with self.lock:
             scopes = [scope for scope, secret in self.scopes.items()
                       if secrets.compare_digest(secret, token)]
@@ -107,19 +120,19 @@ class ChatBroker:
                 return {"ok": False, "error": "聊天未连接或存在多个设备，请保留一个聊天连接"}
             cid, session = sessions[0]
             if sum(p["connection"] == cid for p in self.pending.values()) >= 8:
-                return {"ok": False, "error": "查询队列已满"}
+                return {"ok": False, "error": "CLI 操作队列已满"}
             rid = secrets.token_hex(16)
             pending = {"connection": cid, "thread": session["thread"],
                        "event": threading.Event(), "result": None}
             self.pending[rid] = pending
         try:
-            sent = asyncio.run_coroutine_threadsafe(session["send"]({
-                "type": "pd_cli_request", "protocol": PROTOCOL,
-                "id": rid, "thread_id": session["thread"], "method": "helper.cli", "args":args}),
-                session["loop"])
+            frame={"type":"pd_cli_request","protocol":PROTOCOL,"id":rid,"thread_id":session["thread"],
+                   "method":"helper.cli.io" if input is not None else "helper.cli","args":args}
+            if input is not None: frame["input"]=input
+            sent = asyncio.run_coroutine_threadsafe(session["send"](frame),session["loop"])
             sent.result(timeout=3)
             pending["event"].wait(self.timeout)
-            return pending["result"] or {"ok": False, "error": "本机查询超时"}
+            return pending["result"] or {"ok": False, "error": "本机 CLI 调用超时"}
         except (TimeoutError, RuntimeError, OSError):
             return {"ok": False, "error": "聊天连接不可用"}
         finally:

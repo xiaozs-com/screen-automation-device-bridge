@@ -1,7 +1,7 @@
 {
   "id": "pd-device-bridge",
   "name": "PD 按需 CLI 桥接",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "protocol": "pd-chat-cli@2",
   "capabilities": [
     "desktop.helper-cli@2"
