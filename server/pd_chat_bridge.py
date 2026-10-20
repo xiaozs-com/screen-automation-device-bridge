@@ -87,8 +87,8 @@ class ChatBroker:
         self.http.daemon_threads = True
         threading.Thread(target=self.http.serve_forever, daemon=True).start()
 
-    def bind(self, user_id, agent_id, thread_id, connection_id, send, workspace, loop=None):
-        scope = (user_id, agent_id)
+    def bind(self, user_id, agent_id, thread_id, connection_id, send, workspace, loop=None, *, shared=False):
+        scope = (str(user_id), str(agent_id), str(thread_id))
         with self.lock:
             self.start()
             if scope not in self.scopes:
@@ -99,6 +99,14 @@ class ChatBroker:
                 "loop": loop or asyncio.get_running_loop()}
             config = {"url": f"http://127.0.0.1:{self.http.server_port}", "token": token}
         provision_cli(Path(workspace))
+        marker = Path(workspace) / ".octop/pd-chat-bridge/shared-mode"
+        if shared:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.touch(mode=0o600, exist_ok=True)
+            # Never overwrite the expert owner's default credentials with a
+            # shared visitor's device. Trusted tool context selects the device.
+            return
+        marker.unlink(missing_ok=True)
         path = Path(workspace) / ".pd-chat-caller.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(".tmp")
@@ -107,7 +115,16 @@ class ChatBroker:
         temporary.replace(path)
         path.chmod(0o600)
 
-    def call(self, token, args, input=None):
+    def context_token(self, user_id, agent_id, thread_id):
+        scope = (str(user_id), str(agent_id), str(thread_id))
+        with self.lock:
+            token = self.scopes.get(scope)
+            sessions = [c for c in self.connections.values() if c["scope"] == scope]
+            if token is None or len(sessions) != 1:
+                return None
+            return token
+
+    def call(self, token, args, input=None, *, context_bound=False):
         validate_args(args)
         input=validate_input(input)
         with self.lock:
@@ -115,6 +132,11 @@ class ChatBroker:
                       if secrets.compare_digest(secret, token)]
             if len(scopes) != 1:
                 raise ValueError("unauthorized")
+            if not context_bound:
+                legacy_sessions = [c for c in self.connections.values()
+                                   if c["scope"][:2] == scopes[0][:2]]
+                if len(legacy_sessions) != 1:
+                    return {"ok": False, "error": "旧 CLI 代理无法区分多个聊天线程，请使用 pd_helper_cli 工具"}
             sessions = [(cid, c) for cid, c in self.connections.items() if c["scope"] == scopes[0]]
             if len(sessions) != 1:
                 return {"ok": False, "error": "聊天未连接或存在多个设备，请保留一个聊天连接"}
@@ -193,3 +215,62 @@ def provision_cli(workspace):
                 shutil.copy2(resolver,backup)
                 first,rest=original.split("\n",1)
                 resolver.write_text(first+prefix+rest,encoding="utf-8")
+
+
+def execute_context(broker_instance, agent_id, workspace, configurable, args, stdin=None):
+    """Route only from server-owned runtime identity, never model-selected IDs."""
+    user_id = configurable.get("user")
+    thread_id = configurable.get("thread_id")
+    if not isinstance(user_id, (str, int)) or isinstance(user_id, bool) or not str(user_id):
+        return {"ok": False, "error": "当前调用缺少可信用户身份，未执行"}
+    if not isinstance(thread_id, str) or not thread_id:
+        return {"ok": False, "error": "当前调用缺少可信聊天线程，未执行"}
+    token = broker_instance.context_token(user_id, agent_id, thread_id)
+    if token is None:
+        return {"ok": False, "error": "当前用户和线程没有唯一的宠物连接，请从自己的宠物发起聊天"}
+    from pd_cli_proxy import prepare, materialize_result
+    try:
+        prepared_args, input = prepare(args, stdin, workspace=workspace)
+        result = broker_instance.call(token, prepared_args, input, context_bound=True)
+        if result.get("ok") is not True:
+            return result
+        import hashlib
+        scope = json.dumps([str(user_id), str(agent_id), thread_id])
+        key = hashlib.sha256(scope.encode()).hexdigest()
+        output_dir = Path(workspace) / ".octop/pd-chat-bridge/results" / key
+        return materialize_result(result, output_dir)
+    except (ValueError, OSError, KeyError, TypeError) as error:
+        return {"ok": False, "error": "小助手桥接调用失败：" + str(error)[:300]}
+
+
+def bridge_tools(agent_id, workspace):
+    """Register an identity-bound tool; no shell/execute permission is needed."""
+    from langchain_core.tools import StructuredTool
+    from langgraph.config import get_config
+    from pydantic import BaseModel, ConfigDict
+
+    class HelperCliInput(BaseModel):
+        model_config = ConfigDict(extra="forbid")
+        args: list[str]
+        stdin: str | None = None
+
+    async def run(args: list[str], stdin: str | None = None) -> str:
+        configurable = dict(get_config().get("configurable") or {})
+        result = await asyncio.to_thread(
+            execute_context, broker, agent_id, workspace, configurable, args, stdin)
+        return json.dumps(result, ensure_ascii=False)
+
+    return [StructuredTool.from_function(
+        coroutine=run,
+        name="pd_helper_cli",
+        args_schema=HelperCliInput,
+        infer_schema=False,
+        description=(
+            "通过当前用户自己的桌面宠物调用本机屏幕自动化小助手。共享专家也使用本工具；"
+            "不要查找或读取共享工作区的 .pd-chat-caller.json，不要在服务器启动 GUI。"
+            "args 为参数数组，例如 ['cli','status']、['cli','describe']、"
+            "['cli','window','list-visible'] 或 ['browser','status']；stdin 为可选文本。"
+            "支持完整 CLI、自动上传服务器工作流源文件，以及 --pd-upload/--pd-download。"
+            "只使用当前用户及当前线程的连接，未连接时返回错误，不会调用其他用户设备。"
+        ),
+    )]

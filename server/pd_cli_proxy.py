@@ -30,7 +30,16 @@ def upload(path,index,prefix=''):
  if prefix:value['prefix']=prefix
  return value
 
-def prepare(arguments,stdin=None):
+def prepare(arguments,stdin=None,workspace=None):
+ base=Path(workspace).resolve() if workspace is not None else None
+ def server_path(value):
+  path=Path(value).expanduser()
+  return base/path if base is not None and not path.is_absolute() else path
+ def upload_source(path,index,prefix=''):
+  path=server_path(path)
+  if base is not None and not path.resolve().is_relative_to(base):
+   raise ValueError('shared tool uploads must stay inside the expert workspace')
+  return upload(path,index,prefix)
  args=list(arguments);uploads=[];downloads=[]
  while args and args[0].startswith('--pd-'):
   option=args.pop(0)
@@ -38,18 +47,18 @@ def prepare(arguments,stdin=None):
   value=args.pop(0)
   if option=='--pd-download':downloads.append(value)
   else:
-   index,path=value.split('=',1);uploads.append(upload(path,int(index)))
+   index,path=value.split('=',1);uploads.append(upload_source(path,int(index)))
  if not args or args[0] not in ('cli','browser'):raise ValueError('invalid CLI args')
  explicit={item['arg_index'] for item in uploads}
- if args[:3] in (['cli','workflow','install'],['cli','workflow','inspect']) and len(args)>3 and 3 not in explicit and Path(args[3]).exists():
-  uploads.append(upload(args[3],3));explicit.add(3)
+ if args[:3] in (['cli','workflow','install'],['cli','workflow','inspect']) and len(args)>3 and 3 not in explicit and server_path(args[3]).exists():
+  uploads.append(upload_source(args[3],3));explicit.add(3)
  for index,arg in enumerate(args[1:],1):
   option,separator,value=arg.partition('=')
   if option.endswith('-file') and not option.startswith(('--output','--save')):
    target=index if separator else index+1
    source=value if separator else (args[target] if target<len(args) else '')
-   if target not in explicit and source and Path(source).is_file():
-    uploads.append(upload(source,target,option+'=' if separator else ''));explicit.add(target)
+   if target not in explicit and source and server_path(source).is_file():
+    uploads.append(upload_source(source,target,option+'=' if separator else ''));explicit.add(target)
  if any(item['arg_index']<1 or item['arg_index']>=len(args) for item in uploads):raise ValueError('invalid upload argument index')
  files=[file for item in uploads for file in item['files']]
  if len(files)>MAX_FILES or sum(len(base64.b64decode(file['data'])) for file in files)>MAX_BYTES:raise ValueError('upload exceeds 128 files or 4 MiB')
@@ -62,9 +71,9 @@ def prepare(arguments,stdin=None):
  if downloads:input['downloads']=downloads
  return args,input or None
 
-def save_files(files):
+def save_files(files, base=None):
  if not isinstance(files,list) or len(files)>MAX_FILES:raise ValueError('invalid returned files')
- root=Path.cwd()/'.octop/pd-chat-bridge/files'/uuid.uuid4().hex
+ root=(Path(base) if base is not None else Path.cwd()/'.octop/pd-chat-bridge')/'files'/uuid.uuid4().hex
  saved=[];size=0;count=0
  for index,item in enumerate(files):
   name=relative(item['name'])
@@ -84,12 +93,39 @@ def save_files(files):
   saved.append({'source':item['source'],'path':str(target.resolve()),'kind':item['kind']})
  return saved
 
+def materialize_result(result, base=None):
+ result=dict(result)
+ stdout=result['stdout']
+ if result.get('artifact'):
+  artifact=result['artifact']
+  if artifact['media_type']!='image/png':raise ValueError('invalid screenshot type')
+  data=base64.b64decode(artifact['data'],validate=True)
+  if len(data)>MAX_BYTES or not data.startswith(b'\x89PNG\r\n\x1a\n'):raise ValueError('invalid screenshot')
+  folder=(Path(base) if base is not None else Path.cwd()/'.octop/pd-chat-bridge')/'captures';folder.mkdir(parents=True,exist_ok=True)
+  path=folder/(uuid.uuid4().hex+'.png');path.write_bytes(data);path.chmod(0o600)
+  value=json.loads(stdout);value['path']=str(path.resolve());stdout=json.dumps(value,ensure_ascii=False)+'\n'
+ metadata={}
+ if result.get('files'):metadata['bridge_files']=save_files(result['files'],base)
+ if result.get('uploaded_files'):metadata['bridge_uploaded_files']=result['uploaded_files']
+ if metadata:
+  try:
+   value=json.loads(stdout)
+   if not isinstance(value,dict):raise ValueError()
+   value.update(metadata);stdout=json.dumps(value,ensure_ascii=False)+'\n'
+  except ValueError:result['stderr']+=json.dumps(metadata,ensure_ascii=False)+'\n'
+ result['stdout']=stdout
+ result.pop('artifact',None)
+ result.pop('files',None)
+ return result
+
 def main():
  try:
   stdin=None
   if not sys.stdin.isatty():
    stdin=sys.stdin.read(1024*1024+1)
   args,input=prepare(sys.argv[1:],stdin if stdin else None)
+  if (Path.cwd()/'.octop/pd-chat-bridge/shared-mode').exists():
+   raise ValueError('共享专家请使用 pd_helper_cli 工具，不使用工作区默认桥接凭据')
   cfg=json.loads(Path(os.environ.get('PD_CHAT_CALLER_CONFIG',str(Path.cwd()/'.pd-chat-caller.json'))).read_text())
   parsed=urlsplit(cfg['url'])
   if parsed.scheme!='http' or parsed.hostname!='127.0.0.1' or parsed.username or parsed.password or parsed.query or parsed.fragment:raise ValueError('invalid local broker URL')
@@ -103,24 +139,8 @@ def main():
   result=json.loads(raw)
   if result.get('ok') is not True:
    print(json.dumps(result,ensure_ascii=False),file=sys.stderr);return 1
+  result=materialize_result(result)
   stdout=result['stdout']
-  if result.get('artifact'):
-   artifact=result['artifact']
-   if artifact['media_type']!='image/png':raise ValueError('invalid screenshot type')
-   data=base64.b64decode(artifact['data'],validate=True)
-   if len(data)>MAX_BYTES or not data.startswith(b'\x89PNG\r\n\x1a\n'):raise ValueError('invalid screenshot')
-   folder=Path.cwd()/'.octop/pd-chat-bridge/captures';folder.mkdir(parents=True,exist_ok=True)
-   path=folder/(uuid.uuid4().hex+'.png');path.write_bytes(data);path.chmod(0o600)
-   value=json.loads(stdout);value['path']=str(path.resolve());stdout=json.dumps(value,ensure_ascii=False)+'\n'
-  metadata={}
-  if result.get('files'):metadata['bridge_files']=save_files(result['files'])
-  if result.get('uploaded_files'):metadata['bridge_uploaded_files']=result['uploaded_files']
-  if metadata:
-   try:
-    value=json.loads(stdout)
-    if not isinstance(value,dict):raise ValueError()
-    value.update(metadata);stdout=json.dumps(value,ensure_ascii=False)+'\n'
-   except ValueError:sys.stderr.write(json.dumps(metadata,ensure_ascii=False)+'\n')
   if args[:2] in (["cli","describe"],["cli","capabilities"]):
    try:
     value=json.loads(stdout)

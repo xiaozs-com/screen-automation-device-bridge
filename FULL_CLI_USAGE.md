@@ -39,3 +39,9 @@ JSON 的 bridge_files[].path 是服务器可读路径，AI 可以通过原服务
 继续使用 pd-chat-cli@2；含标准输入/文件的请求方法为 helper.cli.io，旧客户端会拒绝该方法，不会静默忽略文件。服务器 ws.py 绑定格式和已有补丁保持不变，必须同时更新服务器模块和 Windows 组件。服务端同一 Agent 的多设备歧义仍拒绝，结果须匹配请求 ID 和线程；不恢复授权弹窗。
 
 cli describe/capabilities 会附加 chat_bridge 使用说明，便于原 Skill 和 AI 发现桥接能力。没有新增 Agent 专属补丁、MCP、SSH 或公网端口。
+
+## 共享专家
+
+共享用户通过服务端工具 pd_helper_cli 调用，参数例如 `{"args":["cli","window","list-visible"]}`；可额外传入 stdin 文本。用户和线程由运行时提供，不是工具参数。无需为每位用户复制专家，也无需为小助手 CLI 开启通用 shell/execute。专家仍需有相应 Skill/说明才能理解业务流程，但工具本身可直接查询 CLI。
+
+共享模式不要读取或依赖专家根目录的 .pd-chat-caller.json，也不要用旧 pd-helper 入口。完整更新步骤、修改范围和双用户验收见 SERVER_UPGRADE.md。

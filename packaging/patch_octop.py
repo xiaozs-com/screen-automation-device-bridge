@@ -4,44 +4,24 @@ import hashlib
 from pathlib import Path
 import difflib
 
+def _updater():
+    import importlib.util
+    path = Path(__file__).resolve().parents[1] / "update_bridge.py"
+    spec = importlib.util.spec_from_file_location("pd_bridge_updater", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def patched(source):
     if "PD_CHAT_BRIDGE_PATCH" in source:
         raise ValueError("Source already patched")
-    changes = [
-        ('from octop.infra.gateway.ws import WS_CHANNEL_ID\n',
-         'from octop.infra.gateway.ws import WS_CHANNEL_ID\n'
-         '# PD_CHAT_BRIDGE_PATCH: independently installed adapter; ordinary chat still works without it.\n'
-         'try:\n'
-         '    from pd_chat_bridge import broker as pd_chat_broker\n'
-         'except ImportError:\n'
-         '    pd_chat_broker = None\n'),
-        ('            if msg_type == "ping":\n',
-         '            if msg_type == "pd_cli_result":\n'
-         '                if pd_chat_broker is not None:\n'
-         '                    pd_chat_broker.complete(connection_id, payload)\n'
-         '                continue\n'
-         '            if msg_type == "ping":\n'),
-        ('            inbound = build_dashboard_inbound(\n',
-         '            if pd_chat_broker is not None and payload.get("pd_bridge") == {\n'
-         '                "protocol": "pd-chat-cli@2", "operations": ["helper.cli"]\n'
-         '            }:\n'
-         '                registry = server.app_runtime.agent_registry\n'
-         '                row = registry.get_row(agent_id)\n'
-         '                if row is not None and row.user_id == user.id:\n'
-         '                    pd_chat_broker.bind(user.id, agent_id, prepared.thread_id,\n'
-         '                        connection_id, send_frame, registry.resolve_workspace_dir(agent_id))\n'
-         '            inbound = build_dashboard_inbound(\n'),
-        ('        hub.unregister(connection_id)\n',
-         '        if pd_chat_broker is not None:\n'
-         '            pd_chat_broker.disconnect(connection_id)\n'
-         '        hub.unregister(connection_id)\n'),
-    ]
-    for old, new in changes:
-        expected = 2 if old == '            if msg_type == "ping":\n' else 1
-        if source.count(old) != expected:
-            raise ValueError("Upstream source differs; re-review before patching")
-        source = source.replace(old, new, 1)
-    return source
+    return _updater().chat_candidate(source)
+
+
+def patched_manager(source):
+    return _updater().manager_candidate(source)
+
 
 def main():
     parser = argparse.ArgumentParser()

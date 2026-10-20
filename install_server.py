@@ -46,9 +46,15 @@ def main():
     original=source.read_text(encoding="utf-8")
     try:
         candidate=patcher.patched(original)
+        manager=package/"infra/agents/manager.py"
+        manager_original=manager.read_text(encoding="utf-8")
+        manager_candidate=patcher.patched_manager(manager_original)
     except ValueError as error:
         parser.error(str(error))
     compile(candidate,str(source),"exec")
+    compile(manager_candidate,str(manager),"exec")
+    for name in ("pd_chat_bridge.py", "pd_cli_proxy.py"):
+        compile((bundle/name).read_bytes(),name,"exec")
     stamp=datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     review=bundle/"install-records"/stamp
     review.mkdir(parents=True)
@@ -56,6 +62,9 @@ def main():
     (review/"octop-chat-bridge.patch").write_text("".join(difflib.unified_diff(
         original.splitlines(True),candidate.splitlines(True),fromfile="ws.py",tofile="ws.py.patched")),encoding="utf-8")
     (review/"baseline.sha256").write_text(hashlib.sha256(source.read_bytes()).hexdigest()+"\n")
+    (review/"manager-bridge.patch").write_text("".join(difflib.unified_diff(
+        manager_original.splitlines(True),manager_candidate.splitlines(True),
+        fromfile="manager.py",tofile="manager.py.patched")),encoding="utf-8")
     print("预览补丁："+str(review/"octop-chat-bridge.patch"))
     if not args.apply:
         print("未修改 Octop。检查补丁后，同样参数加 --apply 安装。")
@@ -66,22 +75,27 @@ def main():
         parser.error("已有桥接模块；请先核对旧安装，禁止自动覆盖")
     backup=review/"ws.py.original"
     shutil.copy2(source,backup)
-    shutil.copy2(bundle/"pd_chat_bridge.py",module)
-    shutil.copy2(bundle/"pd_cli_proxy.py",proxy)
+    manager_backup=review/"manager.py.original"
+    shutil.copy2(manager,manager_backup)
     try:
+        shutil.copy2(bundle/"pd_chat_bridge.py",module)
+        shutil.copy2(bundle/"pd_cli_proxy.py",proxy)
         source.write_text(candidate,encoding="utf-8")
+        manager.write_text(manager_candidate,encoding="utf-8")
     except OSError:
         shutil.copy2(backup,source)
-        module.unlink()
-        proxy.unlink()
+        shutil.copy2(manager_backup,manager)
+        module.unlink(missing_ok=True)
+        proxy.unlink(missing_ok=True)
         raise
     (review/"rollback.txt").write_text(
         "先停止 Octop，再恢复原文件：\n"+str(backup)+" -> "+str(source)+
+        "\n"+str(manager_backup)+" -> "+str(manager)+
         "\n删除本次新增模块：\n"+str(module)+
         "\n删除本次新增代理模块：\n"+str(proxy)+
         "\n然后按原方式重启 Octop。不要删除 Agent 工作目录或其他 Skill。\n",encoding="utf-8")
     print("安装文件完成，备份："+str(backup))
-    print("无须指定 Agent；已有或新 Agent 的小助手 Skill 在聊天连接时自动接入 CLI 代理。")
+    print("无须指定 Agent；私有及共享 Agent 注册 pd_helper_cli 工具，按当前用户和线程调用自己的宠物。")
     print("尚未重启 Octop。请按原方式重启，并验证导入、WSS 和私有 Agent。")
     print("请使用与 Octop 服务相同的运行用户和 Python 环境。更新 Octop 后需重新检查补丁兼容性。")
 
