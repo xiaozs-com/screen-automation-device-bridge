@@ -1,0 +1,171 @@
+{
+  "targetOctopTag": "v1.0.3b1",
+  "assets": [
+    {
+      "file": "favico.svg",
+      "sha256": "a4f33c2665ae8ca9a77fc6bd6b252c6e1d9a077b2bb287e2cbe5a56422fc8cfb",
+      "bytes": 1278,
+      "sourceRepository": "https://github.com/xiaozs-com/paldee-pet",
+      "sourceFile": "src/assets/logo.svg",
+      "operation": "existing vector mark; horizontal variants add Paldee wordmark"
+    },
+    {
+      "file": "logo_horizontal_dark.png",
+      "sha256": "068d1f97f0dd0bf6906acb020ad59ca9e205ef1193245b6065a3da3c7063c23b",
+      "bytes": 9930,
+      "sourceRepository": "https://github.com/xiaozs-com/paldee-pet",
+      "sourceFile": "src/assets/logo.svg",
+      "operation": "existing vector mark; horizontal variants add Paldee wordmark",
+      "dimensions": [
+        420,
+        112
+      ],
+      "iconBounds": {
+        "x": 4,
+        "y": 8,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "file": "logo_horizontal_dark.svg",
+      "sha256": "683bcbb8386f3db3040e06155f069e10d523c38141eed216b12e64735517bdd7",
+      "bytes": 1487,
+      "sourceRepository": "https://github.com/xiaozs-com/paldee-pet",
+      "sourceFile": "src/assets/logo.svg",
+      "operation": "existing vector mark; horizontal variants add Paldee wordmark"
+    },
+    {
+      "file": "logo_horizontal_white.png",
+      "sha256": "ccc6f3db17dc087b00448094715860ce86a49ee0205b5be17147c1d2adc48bef",
+      "bytes": 9629,
+      "sourceFile": "screen-automation-helper/assets/screen-automation-helper_d.png",
+      "operation": "unmodified white PD bitmap embedded in existing SVG branding; horizontal variant adds white Paldee wordmark",
+      "dimensions": [
+        420,
+        112
+      ],
+      "sourceSha256": "e0ea858624107eea1c2cffc9785b08d3e10d25b9f2514068a9f944d2bd5551cf",
+      "iconBounds": {
+        "x": 4,
+        "y": 8,
+        "width": 96,
+        "height": 96
+      }
+    },
+    {
+      "file": "logo_horizontal_white.svg",
+      "sha256": "45f9bda4d5e91734d6b949751672f80bb9a7e848e3c564ed764f050b02f3c2f3",
+      "bytes": 38571,
+      "sourceFile": "screen-automation-helper/assets/screen-automation-helper_d.png",
+      "operation": "unmodified white PD bitmap embedded in existing SVG branding; horizontal variant adds white Paldee wordmark",
+      "sourceSha256": "e0ea858624107eea1c2cffc9785b08d3e10d25b9f2514068a9f944d2bd5551cf"
+    },
+    {
+      "file": "logo_vertical_dark.svg",
+      "sha256": "dcc8ab9b4ff71592a94c64c7ae0d517e5491b812fb8da53729411d4bea70095e",
+      "bytes": 1250,
+      "sourceRepository": "https://github.com/xiaozs-com/paldee-pet",
+      "sourceFile": "src/assets/logo.svg",
+      "operation": "existing vector mark; horizontal variants add Paldee wordmark"
+    },
+    {
+      "file": "logo_vertical_white.svg",
+      "sha256": "7d7c663c1927c5acaa2e9784e71046120c7c4cd50202c04a23830ef26baf7c44",
+      "bytes": 38392,
+      "sourceFile": "screen-automation-helper/assets/screen-automation-helper_d.png",
+      "operation": "unmodified white PD bitmap embedded in existing SVG branding; horizontal variant adds white Paldee wordmark",
+      "sourceSha256": "e0ea858624107eea1c2cffc9785b08d3e10d25b9f2514068a9f944d2bd5551cf"
+    },
+    {
+      "file": "octop-mascot-empty.png",
+      "sha256": "6c38ceb28e61e8948b9fc9567c094c7b7ab5d9c787959cba0198e7ba03c5e911",
+      "bytes": 538031,
+      "sourceRepository": "https://github.com/xiaozs-com/paldee-pet",
+      "sourceFile": "public/mascots/type.png",
+      "operation": "copied without modification",
+      "dimensions": [
+        856,
+        812
+      ]
+    },
+    {
+      "file": "octop-mascot-peek.webm",
+      "sha256": "8342fe3d3d1a4c80ca4ac622a54e95e5d975ee126eb12d3166cb91619c1dd957",
+      "bytes": 22097,
+      "sourceFile": "octop-mascot-peek.webp",
+      "operation": "container conversion preserving existing Pet animation frames"
+    },
+    {
+      "file": "octop-mascot-peek.webp",
+      "sha256": "fb293eaaaa1f87d94ce903e7a6a9486f4b31662f34c42b6f38ceda978a0604d4",
+      "bytes": 90146,
+      "sourceRepository": "https://github.com/xiaozs-com/paldee-pet",
+      "sourceFile": "public/mascots/peek.webp",
+      "operation": "copied without modification"
+    },
+    {
+      "file": "octop-mascot-tasks.png",
+      "sha256": "6c38ceb28e61e8948b9fc9567c094c7b7ab5d9c787959cba0198e7ba03c5e911",
+      "bytes": 538031,
+      "sourceRepository": "https://github.com/xiaozs-com/paldee-pet",
+      "sourceFile": "public/mascots/type.png",
+      "operation": "copied without modification",
+      "dimensions": [
+        856,
+        812
+      ]
+    },
+    {
+      "file": "octop-mascot-type.webm",
+      "sha256": "fc4260eefed114bb0c331a006db81be3157f9e1afcfe45e1fb6092825a88079c",
+      "bytes": 74328,
+      "sourceFile": "octop-mascot-type.webp",
+      "operation": "container conversion preserving existing Pet animation frames"
+    },
+    {
+      "file": "octop-mascot-type.webp",
+      "sha256": "db98cb0bef2c753a49e9852ff69eff9de68d8fde86fb25853e1de29f9740cf03",
+      "bytes": 531652,
+      "sourceRepository": "https://github.com/xiaozs-com/paldee-pet",
+      "sourceFile": "public/mascots/type.webp",
+      "operation": "copied without modification"
+    },
+    {
+      "file": "paldee-boot.webp",
+      "sha256": "b85e03ad18bf77ceabca586dfb25398fd33b31853e71aa660ae6e7616f710bec",
+      "bytes": 191986,
+      "sourceRepository": "https://github.com/xiaozs-com/paldee-pet",
+      "sourceFile": "public/mascots/taiji-bot/waving.webp",
+      "operation": "copied without modification"
+    },
+    {
+      "file": "paldee-icon.png",
+      "sha256": "9cde85fec4ced737e4436c3a46fad389a9ea22b91e8810cba4f4bc5ea6bb2e43",
+      "bytes": 287461,
+      "sourceRepository": "https://github.com/xiaozs-com/paldee-pet",
+      "sourceFile": "src-tauri/icons/icon.png",
+      "operation": "copied without modification",
+      "dimensions": [
+        512,
+        512
+      ]
+    }
+  ],
+  "sourcePetCommit": "aa8bbff068ca236794938b59e0aa89f53075b83c",
+  "recordedAt": "2026-10-28",
+  "upstreamArchiveSha256": "82aecafeea75cb48ba23d21a12f0e7c017b536a761984b31f25a9fb8f4b775c7",
+  "upstreamCommit": "890111b7879665840414ca28ab168b05b0db0921",
+  "scope": "static assets and installed index.html only; no build or default palette modification",
+  "deployFiles": [
+    "logo_horizontal_dark.png",
+    "logo_horizontal_white.png",
+    "logo_vertical_dark.svg",
+    "logo_vertical_white.svg",
+    "favico.svg",
+    "octop-mascot-empty.png",
+    "octop-mascot-peek.webp",
+    "octop-mascot-type.webp",
+    "paldee-boot.webp"
+  ]
+}

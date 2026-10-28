@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 build/
+temp/
 config/
 .venv/
 

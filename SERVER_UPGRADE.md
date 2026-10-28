@@ -1,5 +1,7 @@
 # 服务器升级：支持共享专家的本机小助手桥接
 
+升级前先核对 [上游精确版本和源码指纹](UPSTREAM_BASELINE.md)，机器记录见 [upstream-baseline.json](upstream-baseline.json)。当前适配的 Octop 为 v1.0.2，完整提交以该记录为准，不代表任意后续版本自动兼容。
+
 本包用于已有两个桥接模块的 Octop。每个用户在自己的宠物中选择同一个共享专家即可，无需复制专家。
 
 ## 更新

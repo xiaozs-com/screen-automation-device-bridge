@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-10-23",
+  "scope": "Recorded source baselines; not a claim of current remote deployment or publication",
+  "octop": {
+    "upstreamRepository": "https://github.com/TencentCloud/Octop",
+    "version": "1.0.2",
+    "tag": "v1.0.2",
+    "commit": "dd9dce470844c25d59effb50615bb3c667ea25cd",
+    "sourceArchiveUrl": "https://codeload.github.com/TencentCloud/Octop/tar.gz/refs/tags/v1.0.2",
+    "sourceArchiveSha256": "b96d48634878796e4a2f147ec330b5705c028660ed27960ac3a3ffe640fcfd16",
+    "pristineFileSha256": {
+      "src/octop/api/routers/chat/ws.py": "7be3f43af3b520b0bf80e0f83777a8096ccac978d9ba651ae9f080aa8979cbde",
+      "src/octop/infra/agents/manager.py": "445669cd8286acd7533a18a0fc66e558d3b7bb65d7fe0cabe8a7cfa5ec52f8e0",
+      "dashboard/src/styles/themePalettes.ts": "8d9c1931ed5f4b1bd1ae924c69415567c6feea4534f7f8706ba446230bbf1039",
+      "dashboard/src/styles/appearanceStorage.ts": "23eeabeb69818ca21e20a60a5ddf15ed65ee80b671c6d733ad3de4acb462ecb8",
+      "dashboard/index.html": "c1371f5d4291913f0ba1a2cf0bd5accda21a5f37807d6a40d5780be78a34e54c",
+      "dashboard/vite.config.ts": "0f4b003332f56d51e4a6ed53192fa9832e09a02010039b164acb26bfd75ce151",
+      "Makefile": "818ca52ac18c9ff220be68fc6ccb878b0449e00de897c446a971e07cdae55cbc",
+      "dashboard/src/context/ThemeContext.tsx": "9ef27d2626b3b9363b1c1b1eef5a4b716f562344c731a9409180d60761f6c925",
+      "dashboard/src/styles/theme-vars.css": "207c9d6b5c72123df6a89aed9189b5d755103a40f4ebb551b4138921e8124cda"
+    },
+    "commitEvidence": "GitHub source tarball global PAX comment; file SHA256 calculated from raw archive bytes",
+    "lastUserReportedServerVersion": "1.0.2",
+    "serverVersionEvidenceDate": "2026-10-20",
+    "serverRecheckedOnRecordDate": false,
+    "websiteCustomizationStatus": "Investigated only; default palette and boot appearance have not been changed, built or deployed"
+  },
+  "deviceBridge": {
+    "repository": "https://github.com/xiaozs-com/screen-automation-device-bridge",
+    "recordedCommit": "21d3b0d0b6bddd35ba260128f36be362c5f1cd26",
+    "upstreamFork": false,
+    "compatibilityTarget": "Octop v1.0.2 at the commit above",
+    "patchedOctopFiles": [
+      "src/octop/api/routers/chat/ws.py",
+      "src/octop/infra/agents/manager.py"
+    ],
+    "addedSitePackagesModules": [
+      "pd_chat_bridge.py",
+      "pd_cli_proxy.py"
+    ],
+    "validation": "52 local tests: 50 passed, 2 skipped; user reported one shared-expert window-list call succeeded; real dual-user/device acceptance pending"
+  },
+  "subsequentWebsiteCustomization": {
+    "recordedAt": "2026-10-28",
+    "targetVersion": "1.0.3b1",
+    "scope": "Static logo/mascot assets and existing index.html only; no compilation or default palette change",
+    "details": "branding/VALIDATION.md",
+    "deploymentEvidence": "User confirmed update complete; no independent server verification"
+  }
+}
